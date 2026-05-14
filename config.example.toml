@@ -1,7 +1,7 @@
 schema_version = "1"
 
 [install]
-bin_dir = "~/.local/bin"
+bin_dir = "/usr/local/bin"
 commands = ["git", "rm", "curl", "wget", "bash", "sh"]
 
 [runtime]
@@ -13,7 +13,7 @@ allow_env_config_override = false
 
 [logging]
 enabled = true
-path = "~/.local/state/shell-command-guard/events.log"
+path = "/var/log/shell-command-guard/events.log"
 log_allows = false
 log_denies = true
 

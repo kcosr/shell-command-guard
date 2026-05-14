@@ -257,7 +257,7 @@ default = "allow"
 fn runtime_wrapper_allows_by_execing_real_command() {
     let temp = TempDir::new().unwrap();
     let home = temp.path().join("home");
-    let config_dir = home.join(".config/shell-command-guard");
+    let config_dir = temp.path().join("etc/shell-command-guard");
     let wrapper_dir = temp.path().join("wrappers");
     let real_dir = temp.path().join("real");
     fs::create_dir_all(&config_dir).unwrap();
@@ -295,6 +295,7 @@ default = "allow"
     let path = std::env::join_paths([wrapper_dir.as_path(), real_dir.as_path()]).unwrap();
     let mut cmd = std::process::Command::new(wrapper_dir.join("echo"));
     cmd.env("HOME", &home)
+        .env("SHELL_COMMAND_GUARD_CONFIG", config_dir.join("config.toml"))
         .env("PATH", path)
         .arg("hello")
         .arg("world");
@@ -310,7 +311,7 @@ default = "allow"
 fn runtime_wrapper_denies_with_generic_policy_message() {
     let temp = TempDir::new().unwrap();
     let home = temp.path().join("home");
-    let config_dir = home.join(".config/shell-command-guard");
+    let config_dir = temp.path().join("etc/shell-command-guard");
     let wrapper_dir = temp.path().join("wrappers");
     let real_dir = temp.path().join("real");
     fs::create_dir_all(&config_dir).unwrap();
@@ -353,7 +354,10 @@ message = "echo is disabled"
 
     let path = std::env::join_paths([wrapper_dir.as_path(), real_dir.as_path()]).unwrap();
     let mut cmd = std::process::Command::new(wrapper_dir.join("echo"));
-    cmd.env("HOME", &home).env("PATH", path).arg("hello");
+    cmd.env("HOME", &home)
+        .env("SHELL_COMMAND_GUARD_CONFIG", config_dir.join("config.toml"))
+        .env("PATH", path)
+        .arg("hello");
     let output = cmd.output().unwrap();
     assert_eq!(output.status.code(), Some(126));
     assert_eq!(

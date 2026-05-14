@@ -27,24 +27,25 @@ The binary is `target/release/shell-command-guard`.
 
 ## Install Binary
 
-Install the compiled binary somewhere stable before creating command wrappers. A user-local install keeps the whole setup removable without root:
+Install the compiled binary somewhere stable before creating command wrappers. For containers and host-level installs, use a system path:
+
+```bash
+sudo install -m 0755 target/release/shell-command-guard /usr/local/bin/shell-command-guard
+```
+
+In a container build running as root, the same install can usually be:
+
+```bash
+install -m 0755 target/release/shell-command-guard /usr/local/bin/shell-command-guard
+```
+
+A user-local install is also supported if you prefer not to write system paths:
 
 ```bash
 mkdir -p ~/.local/bin
 cp target/release/shell-command-guard ~/.local/bin/shell-command-guard
 chmod 0755 ~/.local/bin/shell-command-guard
-```
-
-Make sure `~/.local/bin` is on `PATH`:
-
-```bash
 export PATH="$HOME/.local/bin:$PATH"
-```
-
-For a system-wide install:
-
-```bash
-sudo install -m 0755 target/release/shell-command-guard /usr/local/bin/shell-command-guard
 ```
 
 ## Configuration
@@ -52,18 +53,20 @@ sudo install -m 0755 target/release/shell-command-guard /usr/local/bin/shell-com
 Default config path:
 
 ```text
-~/.config/shell-command-guard/config.toml
+/etc/shell-command-guard/config.toml
 ```
 
 Start from the sample:
 
 ```bash
-mkdir -p ~/.config/shell-command-guard
-cp config.example.toml ~/.config/shell-command-guard/config.toml
+sudo mkdir -p /etc/shell-command-guard
+sudo cp config.example.toml /etc/shell-command-guard/config.toml
 shell-command-guard validate
 ```
 
-Management commands accept `--config <path>`. Runtime wrapper mode uses the default config path by default. `SHELL_COMMAND_GUARD_CONFIG` is intentionally ignored in wrapper mode unless the trusted default config sets:
+Management commands resolve config as `--config`, then `SHELL_COMMAND_GUARD_CONFIG`, then the default path.
+
+Runtime wrapper mode prefers the default system config path. If `/etc/shell-command-guard/config.toml` is absent, it may use `SHELL_COMMAND_GUARD_CONFIG`; this is useful for tests, containers, and mounted config files. If the default system config exists, `SHELL_COMMAND_GUARD_CONFIG` is intentionally ignored in wrapper mode unless that trusted config sets:
 
 ```toml
 [runtime]
@@ -76,7 +79,7 @@ Configure commands and bin directory:
 
 ```toml
 [install]
-bin_dir = "~/.local/bin"
+bin_dir = "/usr/local/bin"
 commands = ["git", "rm", "curl", "wget", "bash", "sh"]
 ```
 
@@ -96,7 +99,7 @@ export PATH="$HOME/.local/bin:$PATH"
 Each wrapper is a symlink:
 
 ```text
-~/.local/bin/git -> /path/to/shell-command-guard
+/usr/local/bin/git -> /usr/local/bin/shell-command-guard
 ```
 
 The guard determines the requested command from `argv[0]`.
@@ -199,7 +202,7 @@ Exec delegate:
 ```toml
 [delegates.custom_git_policy]
 type = "exec"
-command = "~/.config/shell-command-guard/delegates/git-policy"
+command = "/etc/shell-command-guard/delegates/git-policy"
 args = ["--protected", "main", "--protected", "master"]
 timeout_ms = 2000
 on_error = "deny"
@@ -223,7 +226,7 @@ Default logging records denials only:
 ```toml
 [logging]
 enabled = true
-path = "~/.local/state/shell-command-guard/events.log"
+path = "/var/log/shell-command-guard/events.log"
 log_allows = false
 log_denies = true
 ```

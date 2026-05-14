@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Changed
+
+- Changed default runtime config path to `/etc/shell-command-guard/config.toml`.
+- Changed sample wrapper install directory to `/usr/local/bin` for container and system installs.
+- Changed default log path to `/var/log/shell-command-guard/events.log`.
+- Clarified runtime config precedence so `SHELL_COMMAND_GUARD_CONFIG` is used only when the default system config is absent or trusted config enables env override.
 
 ## [0.1.0] - 2026-05-14
 

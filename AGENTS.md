@@ -31,9 +31,10 @@
 
 1. Prefer the current v1 config shape only; do not add compatibility aliases, bridge fields, or dual-shape parsers.
 2. Runtime wrapper output must stay minimal. Detailed diagnostics belong in management commands or logs.
-3. Tests must be deterministic and offline.
-4. For behavior changes, add or update tests and update `README.md`.
-5. Run `cargo fmt --check`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo build --release` before considering broad changes complete.
+3. Runtime config precedence is intentionally conservative: use `/etc/shell-command-guard/config.toml` when present; only use `SHELL_COMMAND_GUARD_CONFIG` when the default is absent or the trusted config enables `runtime.allow_env_config_override`.
+4. Tests must be deterministic and offline.
+5. For behavior changes, add or update tests and update `README.md`.
+6. Run `cargo fmt --check`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo build --release` before considering broad changes complete.
 
 ## Commands You'll Use Often
 

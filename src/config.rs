@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use crate::error::{GuardError, Result};
 
-pub const DEFAULT_CONFIG_PATH: &str = "~/.config/shell-command-guard/config.toml";
+pub const DEFAULT_CONFIG_PATH: &str = "/etc/shell-command-guard/config.toml";
 pub const ENV_CONFIG: &str = "SHELL_COMMAND_GUARD_CONFIG";
 
 #[derive(Debug, Clone, Deserialize)]
@@ -188,6 +188,11 @@ impl Config {
 
     pub fn load_for_runtime() -> Result<Self> {
         let default_path = PathBuf::from(DEFAULT_CONFIG_PATH);
+        if !default_path.exists() {
+            if let Some(path) = env::var_os(ENV_CONFIG) {
+                return Self::load(Path::new(&path));
+            }
+        }
         let mut config = Self::load(&default_path)?;
         if config.runtime.allow_env_config_override {
             if let Some(path) = env::var_os(ENV_CONFIG) {
@@ -374,7 +379,7 @@ fn default_true() -> bool {
 }
 
 fn default_log_path() -> PathBuf {
-    PathBuf::from("~/.local/state/shell-command-guard/events.log")
+    PathBuf::from("/var/log/shell-command-guard/events.log")
 }
 
 fn default_delegate_timeout_ms() -> u64 {

@@ -40,7 +40,7 @@ action = "delegate"
 command = "git"
 args_prefix = ["push"]
 delegate = "git_push_guard"
-message = "git push rejected by protected branch policy for main/master"
+message = "git push to protected branches main or master is not allowed"
 
 [delegates.git_push_guard]
 type = "shell"

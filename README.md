@@ -233,6 +233,8 @@ log_denies = true
 
 Events are JSON Lines and include an event `kind`, decision, rule id, command, args, cwd, real command path, delegate name, and errors when available. Runtime failures use `decision = "error"` with a specific `kind` such as `resolve_error`, `delegate_error`, or `exec_error` so policy denials can be counted separately from operational failures.
 
+Denied invocations are evaluated before real-command resolution, so `real_command` is omitted from deny events. If an `exec_error` follows an allow event for the same invocation, policy approved the command but the kernel did not execute it.
+
 Log files are created with mode `0600` when the guard creates them. Events can still contain sensitive command arguments, paths, and environment-derived context, so choose the log path and retention policy accordingly.
 
 ## Development

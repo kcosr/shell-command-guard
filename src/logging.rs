@@ -37,10 +37,7 @@ pub fn log_decision(
         decision.action_name(),
         decision.rule_id(),
         error,
-        delegate.or(match decision {
-            Decision::Delegate { delegate, .. } => Some(delegate.as_str()),
-            _ => None,
-        }),
+        delegate,
     );
 }
 

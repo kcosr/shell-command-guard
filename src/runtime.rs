@@ -65,9 +65,9 @@ fn run_wrapper_inner(argv: Vec<String>) -> Result<i32> {
                             &config,
                             &invocation,
                             "resolve_error",
-                            None,
+                            decision.rule_id(),
                             &error_string,
-                            None,
+                            delegate_name.as_deref(),
                         );
                         return Err(error);
                     }
@@ -90,9 +90,9 @@ fn run_wrapper_inner(argv: Vec<String>) -> Result<i32> {
                 &config,
                 &invocation,
                 "exec_error",
-                None,
+                decision.rule_id(),
                 &error_string,
-                None,
+                delegate_name.as_deref(),
             );
             Err(error)
         }

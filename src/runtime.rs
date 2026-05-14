@@ -5,7 +5,7 @@ use crate::{
     delegate::{decision_after_delegate, run_delegate},
     error::{GuardError, Result},
     invocation::Invocation,
-    logging::log_decision,
+    logging::{log_decision, log_error},
     policy::{evaluate, CompiledPolicy, Decision},
     resolve::{path_without_wrapper_dir, resolve_real_command},
 };
@@ -25,26 +25,6 @@ fn run_wrapper_inner(argv: Vec<String>) -> Result<i32> {
     let policy = CompiledPolicy::compile(&config)?;
     let guard_exe = env::current_exe()?;
     let mut invocation = Invocation::from_runtime_argv(argv)?;
-    let real_command = match resolve_real_command(&config, &invocation.original_command, &guard_exe)
-    {
-        Ok(real_command) => real_command,
-        Err(error) => {
-            let error_string = error.to_string();
-            let error_decision = Decision::Deny {
-                rule_id: None,
-                message: Some("runtime error".to_string()),
-            };
-            log_decision(
-                &config,
-                &invocation,
-                &error_decision,
-                Some(&error_string),
-                None,
-            );
-            return Err(error);
-        }
-    };
-    invocation.real_command = Some(real_command.clone());
 
     let mut decision = evaluate(&policy, &invocation);
     let mut delegate_name = None;
@@ -61,15 +41,12 @@ fn run_wrapper_inner(argv: Vec<String>) -> Result<i32> {
             }
             Err(error) => {
                 let error_string = error.to_string();
-                let error_decision = Decision::Deny {
-                    rule_id: rule_id.clone(),
-                    message: Some("delegate failed".to_string()),
-                };
-                log_decision(
+                log_error(
                     &config,
                     &invocation,
-                    &error_decision,
-                    Some(&error_string),
+                    "delegate_error",
+                    rule_id.as_deref(),
+                    &error_string,
                     delegate_name.as_deref(),
                 );
                 return Err(error);
@@ -77,25 +54,56 @@ fn run_wrapper_inner(argv: Vec<String>) -> Result<i32> {
         }
     }
 
-    log_decision(
-        &config,
-        &invocation,
-        &decision,
-        delegate_error.as_deref(),
-        delegate_name.as_deref(),
-    );
     match &decision {
         Decision::Allow { .. } => {
+            let real_command =
+                match resolve_real_command(&config, &invocation.original_command, &guard_exe) {
+                    Ok(real_command) => real_command,
+                    Err(error) => {
+                        let error_string = error.to_string();
+                        log_error(
+                            &config,
+                            &invocation,
+                            "resolve_error",
+                            None,
+                            &error_string,
+                            None,
+                        );
+                        return Err(error);
+                    }
+                };
+            invocation.real_command = Some(real_command.clone());
+            log_decision(
+                &config,
+                &invocation,
+                &decision,
+                delegate_error.as_deref(),
+                delegate_name.as_deref(),
+            );
             let mut command = Command::new(real_command);
             command.args(&invocation.original_args);
             command.env("PATH", path_without_wrapper_dir(&config));
             let error = command.exec();
             let error = GuardError::from(error);
             let error_string = error.to_string();
-            log_decision(&config, &invocation, &decision, Some(&error_string), None);
+            log_error(
+                &config,
+                &invocation,
+                "exec_error",
+                None,
+                &error_string,
+                None,
+            );
             Err(error)
         }
         Decision::Deny { .. } => {
+            log_decision(
+                &config,
+                &invocation,
+                &decision,
+                delegate_error.as_deref(),
+                delegate_name.as_deref(),
+            );
             deny(&config, &decision);
             Ok(config.runtime.deny_exit_code)
         }

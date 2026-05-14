@@ -12,6 +12,7 @@
 - Compiled policy regexes once per loaded config instead of recompiling during each rule predicate check.
 - Tightened command-name validation for configured wrapper and rule command names.
 - Preserved delegate names in decision logs and created log files with mode `0600`.
+- Added distinct JSONL log event kinds for resolve, delegate, and exec runtime errors.
 
 ## [0.1.0] - 2026-05-14
 

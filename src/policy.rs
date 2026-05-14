@@ -105,7 +105,10 @@ fn rule_decision(rule: &CompiledRule) -> Decision {
         PolicyAction::Deny => Decision::Deny { rule_id, message },
         PolicyAction::Delegate => Decision::Delegate {
             rule_id,
-            delegate: rule.delegate.clone().unwrap_or_default(),
+            delegate: rule
+                .delegate
+                .clone()
+                .expect("delegate rule validated by CompiledPolicy::compile"),
             message,
         },
     }

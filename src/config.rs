@@ -187,16 +187,20 @@ impl Config {
     }
 
     pub fn load_for_runtime() -> Result<Self> {
-        let default_path = PathBuf::from(DEFAULT_CONFIG_PATH);
+        let env_path = env::var_os(ENV_CONFIG).map(PathBuf::from);
+        Self::load_for_runtime_from(Path::new(DEFAULT_CONFIG_PATH), env_path.as_deref())
+    }
+
+    fn load_for_runtime_from(default_path: &Path, env_path: Option<&Path>) -> Result<Self> {
         if !default_path.exists() {
-            if let Some(path) = env::var_os(ENV_CONFIG) {
-                return Self::load(Path::new(&path));
+            if let Some(path) = env_path {
+                return Self::load(path);
             }
         }
-        let mut config = Self::load(&default_path)?;
+        let mut config = Self::load(default_path)?;
         if config.runtime.allow_env_config_override {
-            if let Some(path) = env::var_os(ENV_CONFIG) {
-                config = Self::load(Path::new(&path))?;
+            if let Some(path) = env_path {
+                config = Self::load(path)?;
             }
         }
         Ok(config)
@@ -391,4 +395,76 @@ fn default_log_path() -> PathBuf {
 
 fn default_delegate_timeout_ms() -> u64 {
     2000
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use super::*;
+
+    #[test]
+    fn runtime_uses_env_config_when_default_is_absent() {
+        let temp = TempDir::new().unwrap();
+        let env_config = write_config(temp.path(), "env", false);
+        let default_config = temp.path().join("missing/config.toml");
+
+        let config =
+            Config::load_for_runtime_from(&default_config, Some(env_config.as_path())).unwrap();
+        assert_eq!(config.install.commands, ["env"]);
+    }
+
+    #[test]
+    fn runtime_ignores_env_config_when_default_exists_without_override() {
+        let temp = TempDir::new().unwrap();
+        let default_config = write_config(temp.path(), "default", false);
+        let env_config = write_config(&temp.path().join("env"), "env", false);
+
+        let config =
+            Config::load_for_runtime_from(default_config.as_path(), Some(env_config.as_path()))
+                .unwrap();
+        assert_eq!(config.install.commands, ["default"]);
+    }
+
+    #[test]
+    fn runtime_uses_env_config_when_default_enables_override() {
+        let temp = TempDir::new().unwrap();
+        let default_config = write_config(temp.path(), "default", true);
+        let env_config = write_config(&temp.path().join("env"), "env", false);
+
+        let config =
+            Config::load_for_runtime_from(default_config.as_path(), Some(env_config.as_path()))
+                .unwrap();
+        assert_eq!(config.install.commands, ["env"]);
+    }
+
+    fn write_config(root: &Path, command: &str, allow_env_override: bool) -> PathBuf {
+        fs::create_dir_all(root).unwrap();
+        let path = root.join(format!("{command}.toml"));
+        fs::write(
+            &path,
+            format!(
+                r#"
+schema_version = "1"
+
+[install]
+bin_dir = "/tmp/scg-test-bin"
+commands = ["{command}"]
+
+[runtime]
+allow_env_config_override = {allow_env_override}
+
+[logging]
+enabled = false
+
+[policy]
+default = "allow"
+"#
+            ),
+        )
+        .unwrap();
+        path
+    }
 }

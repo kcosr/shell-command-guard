@@ -2,6 +2,7 @@ pub mod cli;
 pub mod config;
 pub mod delegate;
 pub mod error;
+pub mod fs_util;
 pub mod install;
 pub mod invocation;
 pub mod logging;

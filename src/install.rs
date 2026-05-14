@@ -7,6 +7,7 @@ use std::{
 use crate::{
     config::Config,
     error::{GuardError, Result},
+    fs_util::canonical_or_self,
 };
 
 #[derive(Debug, Clone)]
@@ -147,8 +148,4 @@ fn link_points_to(link: &Path, target: &Path) -> bool {
         return false;
     };
     canonical_or_self(&actual) == canonical_or_self(target)
-}
-
-fn canonical_or_self(path: &Path) -> PathBuf {
-    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }

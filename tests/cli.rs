@@ -436,6 +436,7 @@ script = "exit 0"
     assert!(output.status.success());
 
     let log = fs::read_to_string(&log_path).unwrap();
+    assert!(log.contains(r#""kind":"decision""#));
     assert!(log.contains(r#""decision":"allow""#));
     assert!(log.contains(r#""delegate":"echo_delegate""#));
     let mode = fs::metadata(log_path).unwrap().permissions().mode() & 0o777;

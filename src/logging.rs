@@ -12,6 +12,7 @@ use crate::{config::Config, invocation::Invocation, policy::Decision};
 #[derive(Debug, Serialize)]
 struct Event<'a> {
     timestamp: String,
+    kind: &'a str,
     decision: &'a str,
     rule_id: Option<&'a str>,
     command: &'a str,
@@ -29,11 +30,53 @@ pub fn log_decision(
     error: Option<&str>,
     delegate: Option<&str>,
 ) {
+    write_event(
+        config,
+        invocation,
+        "decision",
+        decision.action_name(),
+        decision.rule_id(),
+        error,
+        delegate.or(match decision {
+            Decision::Delegate { delegate, .. } => Some(delegate.as_str()),
+            _ => None,
+        }),
+    );
+}
+
+pub fn log_error(
+    config: &Config,
+    invocation: &Invocation,
+    kind: &'static str,
+    rule_id: Option<&str>,
+    error: &str,
+    delegate: Option<&str>,
+) {
+    write_event(
+        config,
+        invocation,
+        kind,
+        "error",
+        rule_id,
+        Some(error),
+        delegate,
+    );
+}
+
+fn write_event(
+    config: &Config,
+    invocation: &Invocation,
+    kind: &'static str,
+    decision: &'static str,
+    rule_id: Option<&str>,
+    error: Option<&str>,
+    delegate: Option<&str>,
+) {
     if !config.logging.enabled {
         return;
     }
-    let is_allow = matches!(decision, Decision::Allow { .. });
-    let is_deny = matches!(decision, Decision::Deny { .. });
+    let is_allow = decision == "allow";
+    let is_deny = decision == "deny";
     if (is_allow && !config.logging.log_allows) || (is_deny && !config.logging.log_denies) {
         return;
     }
@@ -55,8 +98,9 @@ pub fn log_decision(
         timestamp: OffsetDateTime::now_utc()
             .format(&Rfc3339)
             .unwrap_or_else(|_| "unknown".to_string()),
-        decision: decision.action_name(),
-        rule_id: decision.rule_id(),
+        kind,
+        decision,
+        rule_id,
         command: &invocation.effective_command,
         args: &invocation.effective_args,
         cwd: invocation.cwd.to_string_lossy().into_owned(),
@@ -64,10 +108,7 @@ pub fn log_decision(
             .real_command
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned()),
-        delegate: delegate.or(match decision {
-            Decision::Delegate { delegate, .. } => Some(delegate.as_str()),
-            _ => None,
-        }),
+        delegate,
         error,
     };
     if let Ok(line) = serde_json::to_string(&event) {

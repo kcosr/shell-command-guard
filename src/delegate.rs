@@ -170,13 +170,21 @@ mod tests {
     use super::*;
 
     fn config_with_delegate(script: &str) -> Config {
+        config_with_delegate_options(script, 1000, DelegateOnError::Deny)
+    }
+
+    fn config_with_delegate_options(
+        script: &str,
+        timeout_ms: u64,
+        on_error: DelegateOnError,
+    ) -> Config {
         let mut delegates = HashMap::new();
         delegates.insert(
             "check".into(),
             DelegateConfig {
                 kind: DelegateKind::Shell,
-                timeout_ms: 1000,
-                on_error: DelegateOnError::Deny,
+                timeout_ms,
+                on_error,
                 script: Some(script.into()),
                 command: None,
                 args: vec![],
@@ -216,5 +224,38 @@ mod tests {
                 error: None
             }
         ));
+    }
+
+    #[test]
+    fn delegate_timeout_allows_when_configured() {
+        let config = config_with_delegate_options("sleep 1", 10, DelegateOnError::Allow);
+        let invocation = Invocation::new("git".into(), vec!["status".into()]).unwrap();
+        let outcome = run_delegate(&config, &invocation, Some("r1"), "check").unwrap();
+        assert!(matches!(
+            outcome,
+            DelegateOutcome::Allow { exit_code: None }
+        ));
+    }
+
+    #[test]
+    fn delegate_timeout_denies_when_configured() {
+        let config = config_with_delegate_options("sleep 1", 10, DelegateOnError::Deny);
+        let invocation = Invocation::new("git".into(), vec!["status".into()]).unwrap();
+        let outcome = run_delegate(&config, &invocation, Some("r1"), "check").unwrap();
+        assert!(matches!(
+            outcome,
+            DelegateOutcome::Deny {
+                exit_code: None,
+                error: Some(_)
+            }
+        ));
+    }
+
+    #[test]
+    fn delegate_timeout_errors_when_configured() {
+        let config = config_with_delegate_options("sleep 1", 10, DelegateOnError::Error);
+        let invocation = Invocation::new("git".into(), vec!["status".into()]).unwrap();
+        let error = run_delegate(&config, &invocation, Some("r1"), "check").unwrap_err();
+        assert!(matches!(error, GuardError::DelegateTimedOut(_)));
     }
 }

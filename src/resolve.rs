@@ -9,6 +9,7 @@ use std::{
 use crate::{
     config::{expand_tilde_path, Config},
     error::{GuardError, Result},
+    fs_util::canonical_or_self,
 };
 
 pub fn resolve_real_command(config: &Config, command: &str, guard_exe: &Path) -> Result<PathBuf> {
@@ -59,10 +60,6 @@ fn same_path(left: &Path, right: &Path) -> bool {
     canonical_or_self(left) == canonical_or_self(right)
 }
 
-fn canonical_or_self(path: &Path) -> PathBuf {
-    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
-}
-
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, fs};
@@ -107,6 +104,43 @@ mod tests {
 
         let resolved = resolve_real_command(&config, "git", &guard).unwrap();
         assert_eq!(resolved, real);
+        if let Some(path) = old_path {
+            env::set_var("PATH", path);
+        } else {
+            env::remove_var("PATH");
+        }
+    }
+
+    #[test]
+    fn refuses_real_command_that_points_back_to_guard() {
+        let temp = TempDir::new().unwrap();
+        let wrapper_dir = temp.path().join("wrapper");
+        let real_dir = temp.path().join("real");
+        fs::create_dir_all(&wrapper_dir).unwrap();
+        fs::create_dir_all(&real_dir).unwrap();
+        let guard = wrapper_dir.join("shell-command-guard");
+        let recursive_real = real_dir.join("git");
+        fs::write(&guard, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(&guard, fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink(&guard, &recursive_real).unwrap();
+
+        let old_path = env::var_os("PATH");
+        env::set_var("PATH", env::join_paths([&wrapper_dir, &real_dir]).unwrap());
+        let config = Config {
+            schema_version: "1".into(),
+            install: InstallConfig {
+                bin_dir: wrapper_dir,
+                commands: vec!["git".into()],
+            },
+            runtime: RuntimeConfig::default(),
+            logging: LoggingConfig::default(),
+            policy: PolicyConfig::default(),
+            delegates: HashMap::new(),
+            commands: HashMap::new(),
+        };
+
+        let error = resolve_real_command(&config, "git", &guard).unwrap_err();
+        assert!(matches!(error, GuardError::RecursiveCommand(_)));
         if let Some(path) = old_path {
             env::set_var("PATH", path);
         } else {

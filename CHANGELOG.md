@@ -8,6 +8,10 @@
 - Changed sample wrapper install directory to `/usr/local/bin` for container and system installs.
 - Changed default log path to `/var/log/shell-command-guard/events.log`.
 - Clarified runtime config precedence so `SHELL_COMMAND_GUARD_CONFIG` is used only when the default system config is absent or trusted config enables env override.
+- Improved runtime error reporting for non-policy failures instead of labeling every failure as a policy block.
+- Compiled policy regexes once per loaded config instead of recompiling during each rule predicate check.
+- Tightened command-name validation for configured wrapper and rule command names.
+- Preserved delegate names in decision logs and created log files with mode `0600`.
 
 ## [0.1.0] - 2026-05-14
 

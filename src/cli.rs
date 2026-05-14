@@ -10,7 +10,7 @@ use crate::{
         install_wrappers, list_wrappers, uninstall_wrappers, InstallOptions, UninstallOptions,
     },
     invocation::{command_basename, Invocation},
-    policy::{evaluate, Decision},
+    policy::{evaluate, CompiledPolicy, Decision},
     resolve::resolve_real_command,
     runtime,
 };
@@ -147,6 +147,7 @@ fn run_cli() -> Result<()> {
 
 fn check(cmd: CheckCmd, explain: bool) -> Result<()> {
     let config = Config::load_for_management(cmd.config.as_deref())?;
+    let policy = CompiledPolicy::compile(&config)?;
     let guard_exe = env::current_exe()?;
     let mut invocation = Invocation::from_check_argv(cmd.argv)?;
     if let Ok(real_command) =
@@ -154,7 +155,7 @@ fn check(cmd: CheckCmd, explain: bool) -> Result<()> {
     {
         invocation.real_command = Some(real_command);
     }
-    let mut decision = evaluate(&config, &invocation)?;
+    let mut decision = evaluate(&policy, &invocation);
     let mut delegate_result = None;
     if let Decision::Delegate {
         rule_id, delegate, ..

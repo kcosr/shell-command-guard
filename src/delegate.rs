@@ -14,8 +14,24 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DelegateOutcome {
-    Allow { exit_code: Option<i32> },
-    Deny { exit_code: Option<i32> },
+    Allow {
+        exit_code: Option<i32>,
+    },
+    Deny {
+        exit_code: Option<i32>,
+        error: Option<String>,
+    },
+}
+
+impl DelegateOutcome {
+    pub fn error(&self) -> Option<&str> {
+        match self {
+            Self::Deny {
+                error: Some(error), ..
+            } => Some(error),
+            Self::Allow { .. } | Self::Deny { error: None, .. } => None,
+        }
+    }
 }
 
 pub fn run_delegate(
@@ -59,11 +75,18 @@ pub fn run_delegate(
         Ok(Some(code)) if code == 0 => Ok(DelegateOutcome::Allow {
             exit_code: Some(code),
         }),
-        Ok(code) => Ok(DelegateOutcome::Deny { exit_code: code }),
+        Ok(code) => Ok(DelegateOutcome::Deny {
+            exit_code: code,
+            error: None,
+        }),
         Err(err @ GuardError::DelegateTimedOut(_)) | Err(err @ GuardError::DelegateFailed(_)) => {
             match delegate.on_error {
                 DelegateOnError::Allow => Ok(DelegateOutcome::Allow { exit_code: None }),
-                DelegateOnError::Deny | DelegateOnError::Error => Err(err),
+                DelegateOnError::Deny => Ok(DelegateOutcome::Deny {
+                    exit_code: None,
+                    error: Some(err.to_string()),
+                }),
+                DelegateOnError::Error => Err(err),
             }
         }
         Err(err) => Err(err),
@@ -188,7 +211,10 @@ mod tests {
         let outcome = run_delegate(&config, &invocation, Some("r1"), "check").unwrap();
         assert!(matches!(
             outcome,
-            DelegateOutcome::Deny { exit_code: Some(7) }
+            DelegateOutcome::Deny {
+                exit_code: Some(7),
+                error: None
+            }
         ));
     }
 }

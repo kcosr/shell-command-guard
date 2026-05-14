@@ -322,8 +322,7 @@ fn find_shell_script_arg(args: &[String]) -> Option<(usize, &String)> {
             return args.get(index + 1).map(|script| (index + 1, script));
         }
         if arg == "--" {
-            index += 1;
-            continue;
+            break;
         }
         if arg.starts_with('-') && arg.contains('c') {
             return args.get(index + 1).map(|script| (index + 1, script));
@@ -359,6 +358,18 @@ mod tests {
             invocation.shell_script.as_deref(),
             Some("git push origin main")
         );
+    }
+
+    #[test]
+    fn shell_double_dash_stops_c_flag_scan() {
+        let invocation = Invocation::new(
+            "bash".to_string(),
+            vec!["--".to_string(), "-c".to_string(), "git status".to_string()],
+        )
+        .unwrap();
+        assert_eq!(invocation.effective_command, "bash");
+        assert_eq!(invocation.effective_args, ["--", "-c", "git status"]);
+        assert!(invocation.shell_script.is_none());
     }
 
     #[test]

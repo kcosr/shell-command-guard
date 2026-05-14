@@ -350,7 +350,14 @@ pub fn expand_tilde_path(path: &Path) -> PathBuf {
 }
 
 fn validate_command_name(command: &str) -> Result<()> {
-    if command.is_empty() || command.contains('/') {
+    let valid = !command.is_empty()
+        && command != "."
+        && command != ".."
+        && !command.starts_with('-')
+        && command
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'+' | b'-'));
+    if !valid {
         return Err(GuardError::InvalidConfig(format!(
             "invalid command name {command:?}"
         )));

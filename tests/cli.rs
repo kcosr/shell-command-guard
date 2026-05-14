@@ -45,6 +45,34 @@ fn validate_accepts_sample_config() {
 }
 
 #[test]
+fn validate_rejects_invalid_command_names() {
+    let temp = TempDir::new().unwrap();
+    let config = write_config(
+        &temp,
+        r#"
+schema_version = "1"
+
+[install]
+bin_dir = "/tmp/scg-test-bin"
+commands = ["git", "..", "-rf", "bad command"]
+
+[logging]
+enabled = false
+
+[policy]
+default = "allow"
+"#,
+    );
+
+    Command::cargo_bin("shell-command-guard")
+        .unwrap()
+        .args(["validate", "--config", config.to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid command name"));
+}
+
+#[test]
 fn check_reports_deny_rule() {
     let temp = TempDir::new().unwrap();
     let config = write_config(
@@ -305,6 +333,113 @@ default = "allow"
         String::from_utf8_lossy(&output.stdout),
         "real:hello world\n"
     );
+}
+
+#[test]
+fn runtime_wrapper_missing_real_command_reports_error() {
+    let temp = TempDir::new().unwrap();
+    let config_dir = temp.path().join("etc/shell-command-guard");
+    let wrapper_dir = temp.path().join("wrappers");
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::create_dir_all(&wrapper_dir).unwrap();
+
+    let bin = assert_cmd::cargo::cargo_bin("shell-command-guard");
+    std::os::unix::fs::symlink(&bin, wrapper_dir.join("missing-tool")).unwrap();
+
+    fs::write(
+        config_dir.join("config.toml"),
+        format!(
+            r#"
+schema_version = "1"
+
+[install]
+bin_dir = "{wrapper_dir}"
+commands = ["missing-tool"]
+
+[logging]
+enabled = false
+
+[policy]
+default = "allow"
+"#,
+            wrapper_dir = wrapper_dir.display()
+        ),
+    )
+    .unwrap();
+
+    let mut cmd = std::process::Command::new(wrapper_dir.join("missing-tool"));
+    cmd.env("SHELL_COMMAND_GUARD_CONFIG", config_dir.join("config.toml"))
+        .env("PATH", &wrapper_dir);
+    let output = cmd.output().unwrap();
+    assert_eq!(output.status.code(), Some(127));
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("shell-command-guard error: could not resolve real command"));
+}
+
+#[test]
+fn runtime_delegate_name_is_logged_after_allow() {
+    let temp = TempDir::new().unwrap();
+    let config_dir = temp.path().join("etc/shell-command-guard");
+    let wrapper_dir = temp.path().join("wrappers");
+    let real_dir = temp.path().join("real");
+    let log_path = temp.path().join("events.log");
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::create_dir_all(&wrapper_dir).unwrap();
+    fs::create_dir_all(&real_dir).unwrap();
+
+    let bin = assert_cmd::cargo::cargo_bin("shell-command-guard");
+    std::os::unix::fs::symlink(&bin, wrapper_dir.join("echo")).unwrap();
+    write_executable(&real_dir.join("echo"), "#!/bin/sh\nexit 0\n");
+
+    fs::write(
+        config_dir.join("config.toml"),
+        format!(
+            r#"
+schema_version = "1"
+
+[install]
+bin_dir = "{wrapper_dir}"
+commands = ["echo"]
+
+[logging]
+enabled = true
+path = "{log_path}"
+log_allows = true
+log_denies = true
+
+[policy]
+default = "allow"
+
+[[policy.rules]]
+id = "echo-delegate-rule"
+action = "delegate"
+command = "echo"
+delegate = "echo_delegate"
+
+[delegates.echo_delegate]
+type = "shell"
+timeout_ms = 1000
+on_error = "error"
+script = "exit 0"
+"#,
+            wrapper_dir = wrapper_dir.display(),
+            log_path = log_path.display(),
+        ),
+    )
+    .unwrap();
+
+    let path = std::env::join_paths([wrapper_dir.as_path(), real_dir.as_path()]).unwrap();
+    let mut cmd = std::process::Command::new(wrapper_dir.join("echo"));
+    cmd.env("SHELL_COMMAND_GUARD_CONFIG", config_dir.join("config.toml"))
+        .env("PATH", path);
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let log = fs::read_to_string(&log_path).unwrap();
+    assert!(log.contains(r#""decision":"allow""#));
+    assert!(log.contains(r#""delegate":"echo_delegate""#));
+    let mode = fs::metadata(log_path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
 }
 
 #[test]

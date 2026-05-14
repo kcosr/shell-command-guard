@@ -40,47 +40,87 @@ impl Decision {
     }
 }
 
-pub fn evaluate(config: &Config, invocation: &Invocation) -> Result<Decision> {
-    for rule in &config.policy.rules {
-        if rule_matches(rule, invocation)? {
+#[derive(Debug, Clone)]
+pub struct CompiledPolicy {
+    default: PolicyAction,
+    rules: Vec<CompiledRule>,
+}
+
+#[derive(Debug, Clone)]
+struct CompiledRule {
+    rule: RuleConfig,
+    command_regex: Option<Regex>,
+    argv_regex: Option<Regex>,
+    shell_regex: Option<Regex>,
+    cwd_regex: Option<Regex>,
+}
+
+impl CompiledPolicy {
+    pub fn compile(config: &Config) -> Result<Self> {
+        let mut rules = Vec::with_capacity(config.policy.rules.len());
+        for rule in &config.policy.rules {
+            if rule.action == PolicyAction::Delegate && rule.delegate.is_none() {
+                return Err(GuardError::InvalidConfig(format!(
+                    "delegate rule {:?} is missing delegate",
+                    rule.id.as_deref().unwrap_or("<unnamed>")
+                )));
+            }
+            rules.push(CompiledRule {
+                rule: rule.clone(),
+                command_regex: compile_regex(rule.command_regex.as_deref(), "command_regex")?,
+                argv_regex: compile_regex(rule.argv_regex.as_deref(), "argv_regex")?,
+                shell_regex: compile_regex(rule.shell_regex.as_deref(), "shell_regex")?,
+                cwd_regex: compile_regex(rule.cwd_regex.as_deref(), "cwd_regex")?,
+            });
+        }
+        Ok(Self {
+            default: config.policy.default,
+            rules,
+        })
+    }
+}
+
+pub fn evaluate(policy: &CompiledPolicy, invocation: &Invocation) -> Decision {
+    for rule in &policy.rules {
+        if rule_matches(rule, invocation) {
             return rule_decision(rule);
         }
     }
-    Ok(match config.policy.default {
+    match policy.default {
         PolicyAction::Allow => Decision::Allow { rule_id: None },
         PolicyAction::Deny => Decision::Deny {
             rule_id: None,
             message: None,
         },
         PolicyAction::Delegate => unreachable!("policy.default cannot deserialize to delegate"),
-    })
+    }
 }
 
-fn rule_decision(rule: &RuleConfig) -> Result<Decision> {
+fn rule_decision(rule: &CompiledRule) -> Decision {
+    let rule = &rule.rule;
     let rule_id = rule.id.clone();
     let message = rule.message.clone();
-    Ok(match rule.action {
+    match rule.action {
         PolicyAction::Allow => Decision::Allow { rule_id },
         PolicyAction::Deny => Decision::Deny { rule_id, message },
         PolicyAction::Delegate => Decision::Delegate {
             rule_id,
-            delegate: rule.delegate.clone().ok_or_else(|| {
-                GuardError::InvalidConfig("delegate rule missing delegate".into())
-            })?,
+            delegate: rule.delegate.clone().unwrap_or_default(),
             message,
         },
-    })
+    }
 }
 
-fn rule_matches(rule: &RuleConfig, invocation: &Invocation) -> Result<bool> {
-    let command_for_predicates = if rule.shell_regex.is_some() {
+fn rule_matches(compiled: &CompiledRule, invocation: &Invocation) -> bool {
+    let rule = &compiled.rule;
+    let command_for_predicates = if compiled.shell_regex.is_some() {
         &invocation.original_command
     } else {
         &invocation.effective_command
     };
     if let Some(command) = &rule.command {
         if command_for_predicates != command {
-            return Ok(false);
+            return false;
         }
     }
     if !rule.commands.is_empty()
@@ -89,64 +129,51 @@ fn rule_matches(rule: &RuleConfig, invocation: &Invocation) -> Result<bool> {
             .iter()
             .any(|command| command == command_for_predicates)
     {
-        return Ok(false);
+        return false;
     }
-    if let Some(pattern) = &rule.command_regex {
-        if !Regex::new(pattern)
-            .map_err(|source| GuardError::Regex {
-                field: "command_regex".to_string(),
-                source,
-            })?
-            .is_match(command_for_predicates)
-        {
-            return Ok(false);
+    if let Some(pattern) = &compiled.command_regex {
+        if !pattern.is_match(command_for_predicates) {
+            return false;
         }
     }
     if !rule.args_prefix.is_empty() {
         if invocation.effective_args.len() < rule.args_prefix.len() {
-            return Ok(false);
+            return false;
         }
         if invocation.effective_args[..rule.args_prefix.len()] != rule.args_prefix {
-            return Ok(false);
+            return false;
         }
     }
-    if let Some(pattern) = &rule.argv_regex {
-        if !Regex::new(pattern)
-            .map_err(|source| GuardError::Regex {
-                field: "argv_regex".to_string(),
-                source,
-            })?
-            .is_match(&invocation.argv_string())
-        {
-            return Ok(false);
+    if let Some(pattern) = &compiled.argv_regex {
+        if !pattern.is_match(&invocation.argv_string()) {
+            return false;
         }
     }
-    if let Some(pattern) = &rule.shell_regex {
+    if let Some(pattern) = &compiled.shell_regex {
         let Some(script) = &invocation.shell_script else {
-            return Ok(false);
+            return false;
         };
-        if !Regex::new(pattern)
-            .map_err(|source| GuardError::Regex {
-                field: "shell_regex".to_string(),
-                source,
-            })?
-            .is_match(script)
-        {
-            return Ok(false);
+        if !pattern.is_match(script) {
+            return false;
         }
     }
-    if let Some(pattern) = &rule.cwd_regex {
-        if !Regex::new(pattern)
-            .map_err(|source| GuardError::Regex {
-                field: "cwd_regex".to_string(),
-                source,
-            })?
-            .is_match(&invocation.cwd.to_string_lossy())
-        {
-            return Ok(false);
+    if let Some(pattern) = &compiled.cwd_regex {
+        if !pattern.is_match(&invocation.cwd.to_string_lossy()) {
+            return false;
         }
     }
-    Ok(true)
+    true
+}
+
+fn compile_regex(pattern: Option<&str>, field: &str) -> Result<Option<Regex>> {
+    pattern
+        .map(|pattern| {
+            Regex::new(pattern).map_err(|source| GuardError::Regex {
+                field: field.to_string(),
+                source,
+            })
+        })
+        .transpose()
 }
 
 #[cfg(test)]
@@ -206,8 +233,9 @@ mod tests {
             },
         ]);
         let invocation = Invocation::new("git".into(), vec!["push".into()]).unwrap();
+        let policy = CompiledPolicy::compile(&config).unwrap();
         assert_eq!(
-            evaluate(&config, &invocation).unwrap(),
+            evaluate(&policy, &invocation),
             Decision::Deny {
                 rule_id: Some("first".into()),
                 message: Some("no push".into())

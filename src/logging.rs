@@ -1,6 +1,7 @@
 use std::{
     fs::{self, OpenOptions},
     io::Write,
+    os::unix::fs::OpenOptionsExt,
 };
 
 use serde::Serialize;
@@ -26,6 +27,7 @@ pub fn log_decision(
     invocation: &Invocation,
     decision: &Decision,
     error: Option<&str>,
+    delegate: Option<&str>,
 ) {
     if !config.logging.enabled {
         return;
@@ -44,6 +46,7 @@ pub fn log_decision(
     let Ok(mut file) = OpenOptions::new()
         .create(true)
         .append(true)
+        .mode(0o600)
         .open(&config.logging.path)
     else {
         return;
@@ -61,10 +64,10 @@ pub fn log_decision(
             .real_command
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned()),
-        delegate: match decision {
+        delegate: delegate.or(match decision {
             Decision::Delegate { delegate, .. } => Some(delegate.as_str()),
             _ => None,
-        },
+        }),
         error,
     };
     if let Ok(line) = serde_json::to_string(&event) {

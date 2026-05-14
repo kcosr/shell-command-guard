@@ -1,0 +1,61 @@
+schema_version = "1"
+
+[install]
+bin_dir = "~/.local/bin"
+commands = ["git", "rm", "curl", "wget", "bash", "sh"]
+
+[runtime]
+deny_exit_code = 126
+deny_prefix = "blocked by policy"
+reveal_guard_name = false
+reveal_rule_id = false
+allow_env_config_override = false
+
+[logging]
+enabled = true
+path = "~/.local/state/shell-command-guard/events.log"
+log_allows = false
+log_denies = true
+
+[policy]
+default = "allow"
+
+[[policy.rules]]
+id = "deny-rm-root"
+action = "deny"
+command = "rm"
+argv_regex = '(^| )-r[f]?\s+/($|\s)'
+message = "recursive removal of / is not allowed"
+
+[[policy.rules]]
+id = "deny-curl-pipe-shell"
+action = "deny"
+commands = ["sh", "bash"]
+shell_regex = '(curl|wget).*[|].*(sh|bash)'
+message = "piping remote scripts directly into a shell is not allowed"
+
+[[policy.rules]]
+id = "git-push-policy"
+action = "delegate"
+command = "git"
+args_prefix = ["push"]
+delegate = "git_push_guard"
+message = "git push did not pass repository safety policy"
+
+[delegates.git_push_guard]
+type = "shell"
+timeout_ms = 2000
+on_error = "deny"
+script = '''
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+case "$branch" in
+  main|master)
+    exit 1
+    ;;
+esac
+exit 0
+'''
+
+# Optional explicit real command mappings.
+#[commands.git]
+#real_path = "/usr/bin/git"

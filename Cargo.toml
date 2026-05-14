@@ -1,0 +1,26 @@
+[package]
+name = "shell-command-guard"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["kevin <kevin@example.com>"]
+description = "Local shell command interception and policy guard."
+
+[dependencies]
+clap = { version = "4.5.4", features = ["derive"] }
+regex = "1.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+shell-words = "1.1"
+thiserror = "1.0"
+time = { version = "0.3", features = ["formatting"] }
+toml = "0.8"
+wait-timeout = "0.2"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.10"
+
+[profile.release]
+opt-level = 3

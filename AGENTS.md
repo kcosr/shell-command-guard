@@ -79,8 +79,8 @@ node scripts/release.mjs major
 node scripts/release.mjs 0.2.0
 ```
 
-The script verifies a clean `main` worktree, required tools, GitHub CLI
-authentication, free local/remote tags, and the Rust project with
+The script verifies a clean `main` worktree, local `main`/`origin/main` sync,
+required tools, GitHub CLI authentication, free local/remote tags, and the Rust project with
 `cargo check`; it then optionally bumps `Cargo.toml` and `Cargo.lock`, updates
 `CHANGELOG.md`, commits, tags, pushes atomically, creates a normal GitHub
 release, then opens a fresh `## [Unreleased]` section.

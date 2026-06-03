@@ -291,10 +291,10 @@ node scripts/release.mjs 0.2.0
 `major` bump `Cargo.toml` and `Cargo.lock` before releasing. An explicit
 version sets `Cargo.toml` and `Cargo.lock` to that version before releasing.
 
-The script requires a clean `main` worktree, promotes `## [Unreleased]` in
-`CHANGELOG.md` to a dated release section, commits, tags, pushes, creates a
-normal GitHub release from the changelog notes, then opens a fresh
-`## [Unreleased]` section.
+The script requires a clean `main` worktree with local `main` matching
+`origin/main`, promotes `## [Unreleased]` in `CHANGELOG.md` to a dated release
+section, commits, tags, pushes, creates a normal GitHub release from the
+changelog notes, then opens a fresh `## [Unreleased]` section.
 
 If GitHub release creation fails after the commit and tag are pushed, create
 the GitHub release manually for the existing tag instead of rerunning the

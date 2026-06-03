@@ -17,36 +17,49 @@ It is a best-effort guardrail, not a sandbox. A determined or tool-capable proce
 - Shell and exec delegates with timeout handling.
 - Minimal runtime denial output and JSONL deny/allow logging.
 
-## Build
+## Install
 
-```bash
-cargo build --release
+Download the latest archive for your platform from GitHub Releases:
+
+```text
+https://github.com/kcosr/shell-command-guard/releases
 ```
 
-The binary is `target/release/shell-command-guard`.
+Supported release platforms are currently:
 
-## Install Binary
+- `linux-x86_64`
+- `macos-arm64`
 
-Install the compiled binary somewhere stable before creating command wrappers. For containers and host-level installs, use a system path:
+Extract the archive on the host that will run `shell-command-guard`. The
+archive contains the optimized binary, sample config, and project
+documentation.
+
+Install the release binary somewhere stable before creating command wrappers.
+For containers and host-level installs, use a system path:
 
 ```bash
-sudo install -m 0755 target/release/shell-command-guard /usr/local/bin/shell-command-guard
+RELEASE_ROOT=/path/to/shell-command-guard-VERSION-PLATFORM
+
+sudo install -m 0755 "$RELEASE_ROOT/bin/shell-command-guard" /usr/local/bin/shell-command-guard
 ```
 
 In a container build running as root, the same install can usually be:
 
 ```bash
-install -m 0755 target/release/shell-command-guard /usr/local/bin/shell-command-guard
+install -m 0755 "$RELEASE_ROOT/bin/shell-command-guard" /usr/local/bin/shell-command-guard
 ```
 
 A user-local install is also supported if you prefer not to write system paths:
 
 ```bash
 mkdir -p ~/.local/bin
-cp target/release/shell-command-guard ~/.local/bin/shell-command-guard
+cp "$RELEASE_ROOT/bin/shell-command-guard" ~/.local/bin/shell-command-guard
 chmod 0755 ~/.local/bin/shell-command-guard
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+For unsupported platforms or local development, build from source in the
+[Development](#development) section.
 
 ## Configuration
 
@@ -60,7 +73,7 @@ Start from the sample:
 
 ```bash
 sudo mkdir -p /etc/shell-command-guard
-sudo cp config.example.toml /etc/shell-command-guard/config.toml
+sudo cp "$RELEASE_ROOT/config.example.toml" /etc/shell-command-guard/config.toml
 shell-command-guard validate
 ```
 
@@ -240,11 +253,13 @@ Log files are created with mode `0600` when the guard creates them. Events can s
 ## Development
 
 ```bash
+cargo build --release
 cargo fmt --check
 cargo test
 cargo clippy --all-targets -- -D warnings
-cargo build --release
 ```
+
+The source-built binary is `target/release/shell-command-guard`.
 
 ## Project Structure
 
@@ -260,17 +275,69 @@ cargo build --release
 - `src/logging.rs` - JSONL decision logging.
 - `tests/cli.rs` - CLI and runtime-wrapper integration tests.
 
-## Release Process
+## Release
 
 Releases use the same lightweight Node script convention as the sibling Rust projects:
 
 ```bash
+node scripts/release.mjs current
 node scripts/release.mjs patch
 node scripts/release.mjs minor
 node scripts/release.mjs major
+node scripts/release.mjs 0.2.0
 ```
 
-The script requires a clean worktree, bumps `Cargo.toml` and `Cargo.lock`, promotes `## [Unreleased]` in `CHANGELOG.md` to a dated release section, commits, tags, pushes, creates a GitHub prerelease from the changelog notes, then opens a fresh `## [Unreleased]` section.
+`current` releases the version already in `Cargo.toml`. `patch`, `minor`, and
+`major` bump `Cargo.toml` and `Cargo.lock` before releasing. An explicit
+version sets `Cargo.toml` and `Cargo.lock` to that version before releasing.
+
+The script requires a clean `main` worktree with local `main` matching
+`origin/main`, promotes `## [Unreleased]` in `CHANGELOG.md` to a dated release
+section, commits, tags, pushes, creates a normal GitHub release from the
+changelog notes, then opens a fresh `## [Unreleased]` section.
+
+If GitHub release creation fails after the commit and tag are pushed, create
+the GitHub release manually for the existing tag instead of rerunning the
+script. Then add a fresh `## [Unreleased]` section with the standard
+`_No unreleased changes._` placeholder, commit it as
+`Prepare for next release`, and push `main`.
+
+Release archives are packaged separately after the GitHub release exists. Build
+Linux x86_64 on Linux, and build macOS ARM64 natively on Apple Silicon.
+Supported archive names are:
+
+```text
+shell-command-guard-VERSION-linux-x86_64.tar.gz
+shell-command-guard-VERSION-macos-arm64.tar.gz
+```
+
+It contains:
+
+```text
+shell-command-guard-VERSION-PLATFORM/
+  bin/shell-command-guard
+  README.md
+  LICENSE
+  CHANGELOG.md
+  config.example.toml
+```
+
+Packaging flow:
+
+```bash
+VERSION=$(sed -n '/^\[package\]/,/^\[/ s/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' Cargo.toml | head -n 1)
+PLATFORM=linux-x86_64 # or macos-arm64
+PKG_ROOT="/tmp/shell-command-guard-${VERSION}-${PLATFORM}"
+
+cargo build --release
+rm -rf "$PKG_ROOT" "$PKG_ROOT.tar.gz"
+mkdir -p "$PKG_ROOT/bin"
+
+install -m 0755 target/release/shell-command-guard "$PKG_ROOT/bin/shell-command-guard"
+cp README.md LICENSE CHANGELOG.md config.example.toml "$PKG_ROOT/"
+
+tar -C /tmp -czf "$PKG_ROOT.tar.gz" "shell-command-guard-${VERSION}-${PLATFORM}"
+```
 
 ## Security Notes
 

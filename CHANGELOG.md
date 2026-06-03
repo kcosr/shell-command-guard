@@ -15,6 +15,12 @@
 - Added distinct JSONL log event kinds for resolve, delegate, and exec runtime errors.
 - Preserved rule and delegate context on resolve and exec error log events.
 - Documented that deny events omit `real_command` because policy is evaluated before command resolution.
+- Release automation now creates normal GitHub releases. ([#1](https://github.com/kcosr/shell-command-guard/pull/1))
+- Release version bumping is now handled inside the single release script, matching sibling Rust release tooling. ([#1](https://github.com/kcosr/shell-command-guard/pull/1))
+- Release script now supports `current` and explicit stable version arguments, with clean-main, origin/main sync, authenticated GitHub CLI, and free-tag preconditions. ([#1](https://github.com/kcosr/shell-command-guard/pull/1))
+- Hardened release version validation, tag checks, release recovery instructions, and release-script cleanup paths. ([#1](https://github.com/kcosr/shell-command-guard/pull/1))
+- Documented release download/install guidance and Linux x86_64 plus macOS ARM64 archive
+  packaging, with source builds moved to the development workflow. ([#1](https://github.com/kcosr/shell-command-guard/pull/1))
 
 ## [0.1.0] - 2026-05-14
 

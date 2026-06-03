@@ -72,9 +72,26 @@ Use these sections under `## [Unreleased]`:
 Use `scripts/release.mjs` as the release entrypoint:
 
 ```bash
+node scripts/release.mjs current
 node scripts/release.mjs patch
 node scripts/release.mjs minor
 node scripts/release.mjs major
+node scripts/release.mjs 0.2.0
 ```
 
-The script verifies a clean worktree, bumps `Cargo.toml` and `Cargo.lock`, updates `CHANGELOG.md`, commits, tags, pushes, creates a GitHub prerelease, then opens a fresh `## [Unreleased]` section.
+The script verifies a clean `main` worktree, local `main`/`origin/main` sync,
+required tools, GitHub CLI authentication, free local/remote tags, and the Rust project with
+`cargo check`; it then optionally bumps `Cargo.toml` and `Cargo.lock`, updates
+`CHANGELOG.md`, commits, tags, pushes atomically, creates a normal GitHub
+release, then opens a fresh `## [Unreleased]` section.
+
+If GitHub release creation fails after the commit and tag are pushed, create
+the GitHub release manually for the existing tag instead of rerunning the
+script. Then add a fresh `## [Unreleased]` section with the standard
+`_No unreleased changes._` placeholder, commit it as
+`Prepare for next release`, and push `main`.
+
+Release archives are packaged separately after the GitHub release exists. Use
+the README release section as the source of truth for archive names and
+contents. The supported release platforms are currently `linux-x86_64` and
+`macos-arm64`, with `bin/shell-command-guard` in the archive.

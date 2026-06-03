@@ -325,7 +325,7 @@ shell-command-guard-VERSION-PLATFORM/
 Packaging flow:
 
 ```bash
-VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "shell-command-guard") | .version')
+VERSION=$(sed -n '/^\[package\]/,/^\[/ s/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' Cargo.toml | head -n 1)
 PLATFORM=linux-x86_64 # or macos-arm64
 PKG_ROOT="/tmp/shell-command-guard-${VERSION}-${PLATFORM}"
 

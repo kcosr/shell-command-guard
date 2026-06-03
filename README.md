@@ -30,8 +30,8 @@ Supported release platforms are currently:
 - `linux-x86_64`
 
 Extract the archive on the host that will run `shell-command-guard`. The
-archive contains the optimized binary, sample config, release tooling, and
-project documentation.
+archive contains the optimized binary, sample config, and project
+documentation.
 
 Install the release binary somewhere stable before creating command wrappers.
 For containers and host-level installs, use a system path:
@@ -297,7 +297,9 @@ normal GitHub release from the changelog notes, then opens a fresh
 
 If GitHub release creation fails after the commit and tag are pushed, create
 the GitHub release manually for the existing tag instead of rerunning the
-script.
+script. Then add a fresh `## [Unreleased]` section with the standard
+`_No unreleased changes._` placeholder, commit it as
+`Prepare for next release`, and push `main`.
 
 Release archives are packaged separately after the GitHub release exists. The
 Linux x86_64 archive is named:
@@ -315,24 +317,22 @@ shell-command-guard-VERSION-linux-x86_64/
   LICENSE
   CHANGELOG.md
   config.example.toml
-  scripts/
 ```
 
 Packaging flow:
 
 ```bash
 VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "shell-command-guard") | .version')
-RELEASE_ROOT="/tmp/shell-command-guard-${VERSION}-linux-x86_64"
+PKG_ROOT="/tmp/shell-command-guard-${VERSION}-linux-x86_64"
 
 cargo build --release
-rm -rf "$RELEASE_ROOT" "$RELEASE_ROOT.tar.gz"
-mkdir -p "$RELEASE_ROOT/bin"
+rm -rf "$PKG_ROOT" "$PKG_ROOT.tar.gz"
+mkdir -p "$PKG_ROOT/bin"
 
-install -m 0755 target/release/shell-command-guard "$RELEASE_ROOT/bin/shell-command-guard"
-cp README.md LICENSE CHANGELOG.md config.example.toml "$RELEASE_ROOT/"
-cp -R scripts "$RELEASE_ROOT/"
+install -m 0755 target/release/shell-command-guard "$PKG_ROOT/bin/shell-command-guard"
+cp README.md LICENSE CHANGELOG.md config.example.toml "$PKG_ROOT/"
 
-tar -C /tmp -czf "$RELEASE_ROOT.tar.gz" "shell-command-guard-${VERSION}-linux-x86_64"
+tar -C /tmp -czf "$PKG_ROOT.tar.gz" "shell-command-guard-${VERSION}-linux-x86_64"
 ```
 
 ## Security Notes

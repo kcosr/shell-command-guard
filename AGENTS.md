@@ -79,14 +79,17 @@ node scripts/release.mjs major
 node scripts/release.mjs 0.2.0
 ```
 
-The script verifies a clean `main` worktree, optionally bumps `Cargo.toml` and
-`Cargo.lock`, verifies version changes with `cargo check`, updates
-`CHANGELOG.md`, commits, tags, pushes, creates a normal GitHub release, then
-opens a fresh `## [Unreleased]` section.
+The script verifies a clean `main` worktree, required tools, GitHub CLI
+authentication, free local/remote tags, and the Rust project with
+`cargo check`; it then optionally bumps `Cargo.toml` and `Cargo.lock`, updates
+`CHANGELOG.md`, commits, tags, pushes atomically, creates a normal GitHub
+release, then opens a fresh `## [Unreleased]` section.
 
 If GitHub release creation fails after the commit and tag are pushed, create
 the GitHub release manually for the existing tag instead of rerunning the
-script.
+script. Then add a fresh `## [Unreleased]` section with the standard
+`_No unreleased changes._` placeholder, commit it as
+`Prepare for next release`, and push `main`.
 
 Release archives are packaged separately after the GitHub release exists. Use
 the README release section as the source of truth for archive names and

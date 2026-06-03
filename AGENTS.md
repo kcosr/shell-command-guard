@@ -72,9 +72,21 @@ Use these sections under `## [Unreleased]`:
 Use `scripts/release.mjs` as the release entrypoint:
 
 ```bash
+node scripts/release.mjs current
 node scripts/release.mjs patch
 node scripts/release.mjs minor
 node scripts/release.mjs major
 ```
 
-The script verifies a clean worktree, bumps `Cargo.toml` and `Cargo.lock`, updates `CHANGELOG.md`, commits, tags, pushes, creates a GitHub prerelease, then opens a fresh `## [Unreleased]` section.
+The script verifies a clean `main` worktree, optionally bumps `Cargo.toml` and
+`Cargo.lock`, updates `CHANGELOG.md`, commits, tags, pushes, creates a normal
+GitHub release, then opens a fresh `## [Unreleased]` section.
+
+If GitHub release creation fails after the commit and tag are pushed, create
+the GitHub release manually for the existing tag instead of rerunning the
+script.
+
+Release archives are packaged separately after the GitHub release exists. Use
+the README release section as the source of truth for archive names and
+contents. The supported release platform is currently `linux-x86_64`, with
+`bin/shell-command-guard` in the archive.

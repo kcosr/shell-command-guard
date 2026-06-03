@@ -15,6 +15,9 @@
 - Added distinct JSONL log event kinds for resolve, delegate, and exec runtime errors.
 - Preserved rule and delegate context on resolve and exec error log events.
 - Documented that deny events omit `real_command` because policy is evaluated before command resolution.
+- Release automation now creates normal GitHub releases.
+- Documented release download/install guidance and Linux x86_64 archive
+  packaging, with source builds moved to the development workflow.
 
 ## [0.1.0] - 2026-05-14
 

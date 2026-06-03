@@ -17,36 +17,48 @@ It is a best-effort guardrail, not a sandbox. A determined or tool-capable proce
 - Shell and exec delegates with timeout handling.
 - Minimal runtime denial output and JSONL deny/allow logging.
 
-## Build
+## Install
 
-```bash
-cargo build --release
+Download the latest archive for your platform from GitHub Releases:
+
+```text
+https://github.com/kcosr/shell-command-guard/releases
 ```
 
-The binary is `target/release/shell-command-guard`.
+Supported release platforms are currently:
 
-## Install Binary
+- `linux-x86_64`
 
-Install the compiled binary somewhere stable before creating command wrappers. For containers and host-level installs, use a system path:
+Extract the archive on the host that will run `shell-command-guard`. The
+archive contains the optimized binary, sample config, release tooling, and
+project documentation.
+
+Install the release binary somewhere stable before creating command wrappers.
+For containers and host-level installs, use a system path:
 
 ```bash
-sudo install -m 0755 target/release/shell-command-guard /usr/local/bin/shell-command-guard
+RELEASE_ROOT=/path/to/shell-command-guard-VERSION-linux-x86_64
+
+sudo install -m 0755 "$RELEASE_ROOT/bin/shell-command-guard" /usr/local/bin/shell-command-guard
 ```
 
 In a container build running as root, the same install can usually be:
 
 ```bash
-install -m 0755 target/release/shell-command-guard /usr/local/bin/shell-command-guard
+install -m 0755 "$RELEASE_ROOT/bin/shell-command-guard" /usr/local/bin/shell-command-guard
 ```
 
 A user-local install is also supported if you prefer not to write system paths:
 
 ```bash
 mkdir -p ~/.local/bin
-cp target/release/shell-command-guard ~/.local/bin/shell-command-guard
+cp "$RELEASE_ROOT/bin/shell-command-guard" ~/.local/bin/shell-command-guard
 chmod 0755 ~/.local/bin/shell-command-guard
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+For unsupported platforms or local development, build from source in the
+[Development](#development) section.
 
 ## Configuration
 
@@ -60,7 +72,7 @@ Start from the sample:
 
 ```bash
 sudo mkdir -p /etc/shell-command-guard
-sudo cp config.example.toml /etc/shell-command-guard/config.toml
+sudo cp "$RELEASE_ROOT/config.example.toml" /etc/shell-command-guard/config.toml
 shell-command-guard validate
 ```
 
@@ -240,11 +252,13 @@ Log files are created with mode `0600` when the guard creates them. Events can s
 ## Development
 
 ```bash
+cargo build --release
 cargo fmt --check
 cargo test
 cargo clippy --all-targets -- -D warnings
-cargo build --release
 ```
+
+The source-built binary is `target/release/shell-command-guard`.
 
 ## Project Structure
 
@@ -260,17 +274,64 @@ cargo build --release
 - `src/logging.rs` - JSONL decision logging.
 - `tests/cli.rs` - CLI and runtime-wrapper integration tests.
 
-## Release Process
+## Release
 
 Releases use the same lightweight Node script convention as the sibling Rust projects:
 
 ```bash
+node scripts/release.mjs current
 node scripts/release.mjs patch
 node scripts/release.mjs minor
 node scripts/release.mjs major
 ```
 
-The script requires a clean worktree, bumps `Cargo.toml` and `Cargo.lock`, promotes `## [Unreleased]` in `CHANGELOG.md` to a dated release section, commits, tags, pushes, creates a GitHub prerelease from the changelog notes, then opens a fresh `## [Unreleased]` section.
+`current` releases the version already in `Cargo.toml`. `patch`, `minor`, and
+`major` bump `Cargo.toml` and `Cargo.lock` before releasing.
+
+The script requires a clean `main` worktree, promotes `## [Unreleased]` in
+`CHANGELOG.md` to a dated release section, commits, tags, pushes, creates a
+normal GitHub release from the changelog notes, then opens a fresh
+`## [Unreleased]` section.
+
+If GitHub release creation fails after the commit and tag are pushed, create
+the GitHub release manually for the existing tag instead of rerunning the
+script.
+
+Release archives are packaged separately after the GitHub release exists. The
+Linux x86_64 archive is named:
+
+```text
+shell-command-guard-VERSION-linux-x86_64.tar.gz
+```
+
+It contains:
+
+```text
+shell-command-guard-VERSION-linux-x86_64/
+  bin/shell-command-guard
+  README.md
+  LICENSE
+  CHANGELOG.md
+  config.example.toml
+  scripts/
+```
+
+Packaging flow:
+
+```bash
+VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "shell-command-guard") | .version')
+RELEASE_ROOT="/tmp/shell-command-guard-${VERSION}-linux-x86_64"
+
+cargo build --release
+rm -rf "$RELEASE_ROOT" "$RELEASE_ROOT.tar.gz"
+mkdir -p "$RELEASE_ROOT/bin"
+
+install -m 0755 target/release/shell-command-guard "$RELEASE_ROOT/bin/shell-command-guard"
+cp README.md LICENSE CHANGELOG.md config.example.toml "$RELEASE_ROOT/"
+cp -R scripts "$RELEASE_ROOT/"
+
+tar -C /tmp -czf "$RELEASE_ROOT.tar.gz" "shell-command-guard-${VERSION}-linux-x86_64"
+```
 
 ## Security Notes
 

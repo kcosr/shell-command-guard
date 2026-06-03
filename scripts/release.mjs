@@ -2,21 +2,38 @@
 /**
  * Release script for shell-command-guard.
  *
- * Usage: node scripts/release.mjs <current|major|minor|patch>
+ * Usage: node scripts/release.mjs <current|major|minor|patch|X.Y.Z>
  */
 
-import { execSync } from "child_process";
-import { readFileSync, unlinkSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { execFileSync, execSync } from "node:child_process";
+import {
+	existsSync,
+	readFileSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
+const PACKAGE_NAME = "shell-command-guard";
+const REPO = "kcosr/shell-command-guard";
 const RELEASE_BRANCH = "main";
-const BUMP_TYPE = process.argv[2];
+const RELEASE_ARG = process.argv[2];
+const BUMP_ARGS = new Set(["major", "minor", "patch"]);
+const VERSION_ARG = /^\d+\.\d+\.\d+(-[\w.]+)?$/;
+const cargoTomlPath = join(ROOT, "Cargo.toml");
+const cargoLockPath = join(ROOT, "Cargo.lock");
+const changelogPath = join(ROOT, "CHANGELOG.md");
 
-if (!["current", "major", "minor", "patch"].includes(BUMP_TYPE)) {
-	console.error("Usage: node scripts/release.mjs <current|major|minor|patch>");
+if (
+	!RELEASE_ARG ||
+	(!BUMP_ARGS.has(RELEASE_ARG) &&
+		RELEASE_ARG !== "current" &&
+		!VERSION_ARG.test(RELEASE_ARG))
+) {
+	console.error("Usage: node scripts/release.mjs <current|major|minor|patch|X.Y.Z>");
 	process.exit(1);
 }
 
@@ -38,14 +55,105 @@ function run(cmd, options = {}) {
 	}
 }
 
+function runFile(command, args, options = {}) {
+	console.log(`$ ${[command, ...args.map((arg) => JSON.stringify(arg))].join(" ")}`);
+	try {
+		return execFileSync(command, args, {
+			encoding: "utf-8",
+			stdio: options.silent ? "pipe" : "inherit",
+			cwd: ROOT,
+			...options,
+		});
+	} catch (_error) {
+		if (!options.ignoreError) {
+			console.error(`Command failed: ${command} ${args.join(" ")}`);
+			process.exit(1);
+		}
+		return null;
+	}
+}
+
 function getVersion() {
-	const content = readFileSync(join(ROOT, "Cargo.toml"), "utf-8");
+	const content = readFileSync(cargoTomlPath, "utf-8");
 	const match = content.match(/\[package\][\s\S]*?\nversion\s*=\s*"([^"]+)"/);
 	if (!match) {
 		console.error("Could not find version in Cargo.toml [package] section");
 		process.exit(1);
 	}
 	return match[1];
+}
+
+function parseVersion(version) {
+	const match = version.match(/^(\d+)\.(\d+)\.(\d+)(.*)$/);
+	if (!match) {
+		return null;
+	}
+	return {
+		major: Number.parseInt(match[1], 10),
+		minor: Number.parseInt(match[2], 10),
+		patch: Number.parseInt(match[3], 10),
+		suffix: match[4] || "",
+	};
+}
+
+function formatVersion(parts) {
+	return `${parts.major}.${parts.minor}.${parts.patch}${parts.suffix}`;
+}
+
+function bumpVersion(currentVersion, releaseArg) {
+	if (VERSION_ARG.test(releaseArg)) {
+		return releaseArg;
+	}
+
+	const parts = parseVersion(currentVersion);
+	if (!parts) {
+		console.error(`Current version "${currentVersion}" is not valid semver`);
+		process.exit(1);
+	}
+
+	if (releaseArg === "patch") {
+		parts.patch += 1;
+	} else if (releaseArg === "minor") {
+		parts.minor += 1;
+		parts.patch = 0;
+	} else if (releaseArg === "major") {
+		parts.major += 1;
+		parts.minor = 0;
+		parts.patch = 0;
+	}
+	parts.suffix = "";
+	return formatVersion(parts);
+}
+
+function escapeRegex(value) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function updateCargoTomlVersion(newVersion) {
+	let content = readFileSync(cargoTomlPath, "utf-8");
+	const versionRegex = /(\[package\][\s\S]*?\nversion\s*=\s*")[^"]*(")/;
+	if (!versionRegex.test(content)) {
+		console.error("Cargo.toml [package] version not found");
+		process.exit(1);
+	}
+	content = content.replace(versionRegex, `$1${newVersion}$2`);
+	writeFileSync(cargoTomlPath, content, "utf-8");
+}
+
+function updateCargoLockVersion(newVersion) {
+	if (!existsSync(cargoLockPath)) {
+		return;
+	}
+	let content = readFileSync(cargoLockPath, "utf-8");
+	const packageRegex = new RegExp(
+		`(\\[\\[package\\]\\]\\nname = "${escapeRegex(PACKAGE_NAME)}"\\nversion = ")[^"]*(")`
+	);
+	if (!packageRegex.test(content)) {
+		console.error(`Cargo.lock package entry not found for ${PACKAGE_NAME}`);
+		process.exit(1);
+	}
+	content = content.replace(packageRegex, `$1${newVersion}$2`);
+	writeFileSync(cargoLockPath, content, "utf-8");
 }
 
 function ensureCleanMain() {
@@ -83,7 +191,6 @@ function ensureTagAvailable(version) {
 }
 
 function updateChangelogForRelease(version) {
-	const changelogPath = join(ROOT, "CHANGELOG.md");
 	const date = new Date().toISOString().split("T")[0];
 	let content = readFileSync(changelogPath, "utf-8");
 
@@ -91,19 +198,22 @@ function updateChangelogForRelease(version) {
 		console.error("Error: No [Unreleased] section found in CHANGELOG.md");
 		process.exit(1);
 	}
+	if (content.includes(`## [${version}]`)) {
+		console.error(`Error: CHANGELOG.md already contains a [${version}] section`);
+		process.exit(1);
+	}
 
-	content = content.replace(
-		/## \[Unreleased\]\n\n_No unreleased changes._/,
-		`## [${version}] - ${date}`
-	);
+	const unreleasedMatch = content.match(/## \[Unreleased\]\n([\s\S]*?)(?=\n## \[|$)/);
+	if (!unreleasedMatch || unreleasedMatch[1].trim() === "_No unreleased changes._") {
+		console.error("Error: CHANGELOG.md has no release notes under [Unreleased]");
+		process.exit(1);
+	}
+
 	content = content.replace(/## \[Unreleased\]/, `## [${version}] - ${date}`);
-
-	writeFileSync(changelogPath, content);
-	console.log(`  Updated CHANGELOG.md: [Unreleased] -> [${version}] - ${date}`);
+	writeFileSync(changelogPath, content, "utf-8");
 }
 
 function extractReleaseNotes(version) {
-	const changelogPath = join(ROOT, "CHANGELOG.md");
 	const content = readFileSync(changelogPath, "utf-8");
 	const versionEscaped = version.replace(/\./g, "\\.");
 	const regex = new RegExp(
@@ -118,68 +228,53 @@ function extractReleaseNotes(version) {
 }
 
 function addUnreleasedSection() {
-	const changelogPath = join(ROOT, "CHANGELOG.md");
 	let content = readFileSync(changelogPath, "utf-8");
-	const unreleasedSection = "## [Unreleased]\n\n_No unreleased changes._\n\n";
-	content = content.replace(/^(# Changelog\n\n)/, `$1${unreleasedSection}`);
-	writeFileSync(changelogPath, content);
-	console.log("  Added [Unreleased] section to CHANGELOG.md");
+	content = content.replace(
+		"# Changelog\n\n",
+		"# Changelog\n\n## [Unreleased]\n\n_No unreleased changes._\n\n"
+	);
+	writeFileSync(changelogPath, content, "utf-8");
 }
 
-console.log("\n=== Release Script ===\n");
+const currentVersion = getVersion();
+const version = RELEASE_ARG === "current" ? currentVersion : bumpVersion(currentVersion, RELEASE_ARG);
 
-console.log("Checking release prerequisites...");
 ensureCleanMain();
 ensureTools();
-console.log("  Clean main branch and required tools available\n");
-
-let version;
-if (BUMP_TYPE === "current") {
-	console.log("Using current Cargo.toml version...");
-	version = getVersion();
-} else {
-	console.log(`Bumping version (${BUMP_TYPE})...`);
-	run(`node scripts/bump-version.mjs ${BUMP_TYPE}`);
-	version = getVersion();
-	console.log(`  New version: ${version}\n`);
-}
 ensureTagAvailable(version);
-console.log(`  Release version: ${version}\n`);
 
-console.log("Updating CHANGELOG.md...");
+if (version !== currentVersion) {
+	updateCargoTomlVersion(version);
+	updateCargoLockVersion(version);
+	run("cargo check");
+}
+
 updateChangelogForRelease(version);
-console.log();
-
-console.log("Committing and tagging...");
 run("git add Cargo.toml Cargo.lock CHANGELOG.md");
 run(`git commit -m "Release v${version}"`);
 run(`git tag v${version}`);
-console.log();
-
-console.log("Pushing to remote...");
 run("git push origin main");
 run(`git push origin v${version}`);
-console.log();
 
-console.log("Creating GitHub release...");
-const releaseNotes = extractReleaseNotes(version);
 const notesFile = join(ROOT, ".release-notes-tmp.md");
-writeFileSync(notesFile, releaseNotes);
-run(
-	`gh release create v${version} --title "v${version}" --notes-file "${notesFile}"`
-);
+writeFileSync(notesFile, extractReleaseNotes(version), "utf-8");
+runFile("gh", [
+	"release",
+	"create",
+	`v${version}`,
+	"--repo",
+	REPO,
+	"--title",
+	`v${version}`,
+	"--notes-file",
+	notesFile,
+]);
 unlinkSync(notesFile);
-console.log();
 
-console.log("Adding [Unreleased] section for next cycle...");
 addUnreleasedSection();
-console.log();
-
-console.log("Committing changelog update...");
 run("git add CHANGELOG.md");
 run('git commit -m "Prepare for next release"');
 run("git push origin main");
-console.log();
 
 console.log(`=== Released v${version} ===`);
-console.log(`https://github.com/kcosr/shell-command-guard/releases/tag/v${version}`);
+console.log(`https://github.com/${REPO}/releases/tag/v${version}`);

@@ -76,11 +76,13 @@ node scripts/release.mjs current
 node scripts/release.mjs patch
 node scripts/release.mjs minor
 node scripts/release.mjs major
+node scripts/release.mjs 0.2.0
 ```
 
 The script verifies a clean `main` worktree, optionally bumps `Cargo.toml` and
-`Cargo.lock`, updates `CHANGELOG.md`, commits, tags, pushes, creates a normal
-GitHub release, then opens a fresh `## [Unreleased]` section.
+`Cargo.lock`, verifies version changes with `cargo check`, updates
+`CHANGELOG.md`, commits, tags, pushes, creates a normal GitHub release, then
+opens a fresh `## [Unreleased]` section.
 
 If GitHub release creation fails after the commit and tag are pushed, create
 the GitHub release manually for the existing tag instead of rerunning the

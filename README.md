@@ -283,10 +283,12 @@ node scripts/release.mjs current
 node scripts/release.mjs patch
 node scripts/release.mjs minor
 node scripts/release.mjs major
+node scripts/release.mjs 0.2.0
 ```
 
 `current` releases the version already in `Cargo.toml`. `patch`, `minor`, and
-`major` bump `Cargo.toml` and `Cargo.lock` before releasing.
+`major` bump `Cargo.toml` and `Cargo.lock` before releasing. An explicit
+version sets `Cargo.toml` and `Cargo.lock` to that version before releasing.
 
 The script requires a clean `main` worktree, promotes `## [Unreleased]` in
 `CHANGELOG.md` to a dated release section, commits, tags, pushes, creates a

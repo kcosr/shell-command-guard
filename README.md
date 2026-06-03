@@ -28,6 +28,7 @@ https://github.com/kcosr/shell-command-guard/releases
 Supported release platforms are currently:
 
 - `linux-x86_64`
+- `macos-arm64`
 
 Extract the archive on the host that will run `shell-command-guard`. The
 archive contains the optimized binary, sample config, and project
@@ -37,7 +38,7 @@ Install the release binary somewhere stable before creating command wrappers.
 For containers and host-level installs, use a system path:
 
 ```bash
-RELEASE_ROOT=/path/to/shell-command-guard-VERSION-linux-x86_64
+RELEASE_ROOT=/path/to/shell-command-guard-VERSION-PLATFORM
 
 sudo install -m 0755 "$RELEASE_ROOT/bin/shell-command-guard" /usr/local/bin/shell-command-guard
 ```
@@ -301,17 +302,19 @@ script. Then add a fresh `## [Unreleased]` section with the standard
 `_No unreleased changes._` placeholder, commit it as
 `Prepare for next release`, and push `main`.
 
-Release archives are packaged separately after the GitHub release exists. The
-Linux x86_64 archive is named:
+Release archives are packaged separately after the GitHub release exists. Build
+Linux x86_64 on Linux, and build macOS ARM64 natively on Apple Silicon.
+Supported archive names are:
 
 ```text
 shell-command-guard-VERSION-linux-x86_64.tar.gz
+shell-command-guard-VERSION-macos-arm64.tar.gz
 ```
 
 It contains:
 
 ```text
-shell-command-guard-VERSION-linux-x86_64/
+shell-command-guard-VERSION-PLATFORM/
   bin/shell-command-guard
   README.md
   LICENSE
@@ -323,7 +326,8 @@ Packaging flow:
 
 ```bash
 VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "shell-command-guard") | .version')
-PKG_ROOT="/tmp/shell-command-guard-${VERSION}-linux-x86_64"
+PLATFORM=linux-x86_64 # or macos-arm64
+PKG_ROOT="/tmp/shell-command-guard-${VERSION}-${PLATFORM}"
 
 cargo build --release
 rm -rf "$PKG_ROOT" "$PKG_ROOT.tar.gz"
@@ -332,7 +336,7 @@ mkdir -p "$PKG_ROOT/bin"
 install -m 0755 target/release/shell-command-guard "$PKG_ROOT/bin/shell-command-guard"
 cp README.md LICENSE CHANGELOG.md config.example.toml "$PKG_ROOT/"
 
-tar -C /tmp -czf "$PKG_ROOT.tar.gz" "shell-command-guard-${VERSION}-linux-x86_64"
+tar -C /tmp -czf "$PKG_ROOT.tar.gz" "shell-command-guard-${VERSION}-${PLATFORM}"
 ```
 
 ## Security Notes
